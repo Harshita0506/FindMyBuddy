@@ -1,53 +1,50 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const http = require("http");
-const socketIo = require("socket.io");
-const path = require("path");
+const { Server } = require("socket.io");
 const cors = require("cors");
 
 const connectDB = require("./config/db");
 const userRoutes = require("./routes/userRoutes");
 
-// ------------------- CONFIG -------------------
+// Load env variables
 dotenv.config();
+
+// Connect MongoDB
 connectDB();
 
 const app = express();
+
+// Middleware
 app.use(express.json());
-
-// ------------------- CORS SETUP -------------------
-const allowedOrigins = [
-  "http://localhost:3000",            // local frontend
-  process.env.FRONTEND_URL,           // deployed frontend (Vercel)
-];
-
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("CORS not allowed"));
-      }
-    },
-    credentials: true,
+    origin: "*", // later you can restrict to frontend URL
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// ------------------- SERVER & SOCKET -------------------
+// Routes
+app.use("/api/user", userRoutes);
+
+// Health check route (important for Render)
+app.get("/", (req, res) => {
+  res.send("FindMyBuddy Backend is running 🚀");
+});
+
+// Create HTTP server
 const server = http.createServer(app);
 
-const io = socketIo(server, {
+// Socket.io setup
+const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: "*", // later replace with Vercel frontend URL
     methods: ["GET", "POST"],
-    credentials: true,
   },
 });
 
-// ------------------- SOCKET LOGIC -------------------
+// Track connected users
 const users = {};
 
 io.on("connection", (socket) => {
@@ -98,29 +95,8 @@ io.on("connection", (socket) => {
   });
 });
 
-// ------------------- ROUTES -------------------
-app.use("/api/user", userRoutes);
-
-// ------------------- ROOT & PRODUCTION BUILD -------------------
-const __dirname1 = path.resolve();
-
-if (process.env.NODE_ENV === "production") {
-  app.use(express.static(path.join(__dirname1, "frontend", "build")));
-
-  app.get("*", (req, res) => {
-    res.sendFile(
-      path.resolve(__dirname1, "frontend", "build", "index.html")
-    );
-  });
-} else {
-  app.get("/", (req, res) => {
-    res.send("API is Running");
-  });
-}
-
-// ------------------- START SERVER -------------------
+// Start server
 const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, () => {
-  console.log(`Server Started on PORT ${PORT}`);
+  console.log(`Server started on port ${PORT}`);
 });
